@@ -50,10 +50,10 @@ export const createNewsLambda = (variables = {}): lambda.Function => {
     },
   });
 
-  // Trigger scrapper every 10 minutes
+  // Trigger scrapper every 5 minutes
   cloudwatch.onSchedule(
     `${projectName}-schedule`,
-    'rate(10 minutes)',
+    'rate(5 minutes)',
     newsScrapperLambda
   );
 
