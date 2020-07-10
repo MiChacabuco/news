@@ -60,6 +60,7 @@ const createApiMethod = (
       uri: `arn:aws:apigateway:${region}:dynamodb:action/${action}`,
       credentials: role.arn,
       requestTemplates,
+      passthroughBehavior: 'WHEN_NO_TEMPLATES',
     },
     { dependsOn: [method] }
   );
@@ -126,16 +127,26 @@ export const createNewsApi = (
     'Query',
     {
       'application/json': interpolate`
+        #set($Integer = 0)
+        #set($limitParam = $input.params('limit'))
+        #if($limitParam.length() > 0)
+            #set($limit = $limitParam)
+        #else
+            #set($limit = '10')
+        #end
+        #set($timestamp = $input.params('timestamp'))
         #set($exclusiveStartKey = $input.params('exclusiveStartKey'))
         {
           "TableName": "${newsTableName}",
-          "KeyConditionExpression": "#Source = :source",
+          "KeyConditionExpression": "#Source = :source#if($timestamp.length() > 0) AND CreatedAt = :timestamp#end",
           "ExpressionAttributeNames": {"#Source": "Source"},
-          "ExpressionAttributeValues": {":source": {"S": "$input.params('source')"}},
-          "Limit": 5,
-          #if($exclusiveStartKey.length() > 0)
-          "ExclusiveStartKey": $util.base64Decode($exclusiveStartKey),
-          #end
+          "ExpressionAttributeValues": {
+            ":source": {"S": "$input.params('source')"}
+            #if($timestamp.length() > 0)
+            , ":timestamp": {"N": "$timestamp"}
+            #end
+          },
+          "Limit": $Integer.parseInt($limit),
           "ScanIndexForward": false
         }
       `,
