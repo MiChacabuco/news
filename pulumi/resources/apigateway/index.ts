@@ -128,27 +128,27 @@ export const createNewsApi = (
     {
       'application/json': interpolate`
         #set($Integer = 0)
-        #set($limitParam = $input.params('limit'))
+        #set($limitParam = $input.params('Limit'))
         #if($limitParam.length() > 0)
             #set($limit = $limitParam)
         #else
             #set($limit = '10')
         #end
-        #set($project = $input.params('project'))
-        #set($timestamp = $input.params('timestamp'))
-        #set($exclusiveStartKey = $input.params('exclusiveStartKey'))
+        #set($projectionExpression = $input.params('ProjectionExpression'))
+        #set($createdAt = $input.params('CreatedAt'))
+        #set($exclusiveStartKey = $input.params('ExclusiveStartKey'))
         {
           "TableName": "${newsTableName}",
-          "KeyConditionExpression": "#Source = :source#if($timestamp.length() > 0) AND CreatedAt = :timestamp#end",
+          "KeyConditionExpression": "#Source = :source#if($createdAt.length() > 0) AND CreatedAt = :createdAt#end",
           "ExpressionAttributeNames": {"#Source": "Source"},
           "ExpressionAttributeValues": {
-            ":source": {"S": "$input.params('source')"}
-            #if($timestamp.length() > 0)
-            , ":timestamp": {"N": "$timestamp"}
+            ":source": {"S": "$input.params('Source')"}
+            #if($createdAt.length() > 0)
+            , ":createdAt": {"N": "$createdAt"}
             #end
           },
-          #if($project.length() > 0)
-          "ProjectionExpression": "$project",
+          #if($projectionExpression.length() > 0)
+          "ProjectionExpression": "$projectionExpression",
           #end
           "Limit": $Integer.parseInt($limit),
           "ScanIndexForward": false
@@ -156,8 +156,11 @@ export const createNewsApi = (
       `,
     },
     {
-      'method.request.querystring.source': true,
-      'method.request.querystring.exclusiveStartKey': false,
+      'method.request.querystring.Source': true,
+      'method.request.querystring.CreatedAt': false,
+      'method.request.querystring.Limit': false,
+      'method.request.querystring.ExclusiveStartKey': false,
+      'method.request.querystring.ProjectionExpression': false,
     }
   );
 
