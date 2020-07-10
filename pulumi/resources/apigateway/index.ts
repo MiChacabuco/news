@@ -1,4 +1,4 @@
-import { interpolate, Output, CustomResourceOptions } from '@pulumi/pulumi';
+import { interpolate, Output, Input } from '@pulumi/pulumi';
 import { apigateway, iam } from '@pulumi/aws';
 
 import { buildAssumeRolePolicy, buildAllowedPolicy } from '../utils';
@@ -6,8 +6,78 @@ import environment from '../../environment';
 
 const { projectName, region } = environment;
 
+const createResource = (
+  name: string,
+  restApi: apigateway.RestApi,
+  pathPart: string
+): apigateway.Resource => {
+  return new apigateway.Resource(name, {
+    restApi,
+    parentId: restApi.rootResourceId,
+    pathPart,
+  });
+};
+
+const createApiMethod = (
+  baseName: string,
+  restApi: apigateway.RestApi,
+  resource: apigateway.Resource,
+  requestValidator: apigateway.RequestValidator,
+  role: iam.Role,
+  action: string,
+  requestTemplates: { [key: string]: Input<string> },
+  requestParameters?: { [key: string]: boolean }
+) => {
+  const commonParams = {
+    restApi,
+    resourceId: resource.id,
+    httpMethod: 'GET',
+  };
+
+  // Method
+  const method = new apigateway.Method(`${baseName}-method`, {
+    ...commonParams,
+    authorization: 'NONE',
+    requestParameters,
+    requestValidatorId: requestValidator.id,
+  });
+  const methodResponse = new apigateway.MethodResponse(
+    `${baseName}-method-response`,
+    {
+      ...commonParams,
+      statusCode: '200',
+    },
+    { dependsOn: [method] }
+  );
+
+  // Integration
+  const integration = new apigateway.Integration(
+    `${baseName}-integration`,
+    {
+      ...commonParams,
+      type: 'AWS',
+      integrationHttpMethod: 'POST',
+      uri: `arn:aws:apigateway:${region}:dynamodb:action/${action}`,
+      credentials: role.arn,
+      requestTemplates,
+    },
+    { dependsOn: [method] }
+  );
+  const integrationResponse = new apigateway.IntegrationResponse(
+    `${baseName}-integration-response`,
+    {
+      ...commonParams,
+      statusCode: '200',
+    },
+    { dependsOn: [integration] }
+  );
+
+  return { method, methodResponse, integration, integrationResponse };
+};
+
 export const createNewsApi = (
-  tableName: Output<string>
+  newsTableName: Output<string>,
+  sourcesTableName: Output<string>
 ): { restApi: apigateway.RestApi; deployment: apigateway.Deployment } => {
   // Create API Gateway role
   const role = new iam.Role(`${projectName}-apigateway-role`, {
@@ -17,6 +87,7 @@ export const createNewsApi = (
   // Create API Gateway policy
   const policy = buildAllowedPolicy(`${projectName}-apigateway-policy`, [
     'dynamodb:Query',
+    'dynamodb:Scan',
   ]);
 
   // Attach policy to role
@@ -35,83 +106,67 @@ export const createNewsApi = (
       types: 'REGIONAL',
     },
   });
-
-  // Resources
-  const newsResourceName = `${restApiName}-news`;
-  const newsResource = new apigateway.Resource(newsResourceName, {
-    restApi,
-    parentId: restApi.rootResourceId,
-    pathPart: 'news',
-  });
-
-  // Methods
-  const newsGetName = `${newsResourceName}-get`;
   const requestValidator = new apigateway.RequestValidator(
-    `${newsGetName}-validator`,
+    `${restApiName}-validator`,
     {
       restApi,
       validateRequestParameters: true,
     }
   );
-  const commonParams = {
-    restApi,
-    resourceId: newsResource.id,
-    httpMethod: 'GET',
-  };
-  const getMethod = new apigateway.Method(`${newsGetName}-method`, {
-    ...commonParams,
-    authorization: 'NONE',
-    requestParameters: {
-      'method.request.querystring.source': true,
-      'method.request.querystring.exclusiveStartKey': false,
-    },
-    requestValidatorId: requestValidator.id,
-  });
-  const getMethodResponse = new apigateway.MethodResponse(
-    `${newsGetName}-method-response`,
-    {
-      ...commonParams,
-      statusCode: '200',
-    },
-    { dependsOn: [getMethod] }
-  );
 
-  // Integrations
-  const pageLimit = 5;
-  const getIntegration = new apigateway.Integration(
-    `${newsGetName}-integration`,
+  // News endpoints
+  const newsResourceName = `${restApiName}-news`;
+  const newsResource = createResource(newsResourceName, restApi, 'news');
+  const newsMethodOutput = createApiMethod(
+    newsResourceName,
+    restApi,
+    newsResource,
+    requestValidator,
+    role,
+    'Query',
     {
-      ...commonParams,
-      type: 'AWS',
-      integrationHttpMethod: 'POST',
-      uri: `arn:aws:apigateway:${region}:dynamodb:action/Query`,
-      credentials: role.arn,
-      requestTemplates: {
-        'application/json': interpolate`
+      'application/json': interpolate`
         #set($exclusiveStartKey = $input.params('exclusiveStartKey'))
         {
-            "TableName": "${tableName}",
-            "KeyConditionExpression": "#Source = :source",
-            "ExpressionAttributeNames": {"#Source": "Source"},
-            "ExpressionAttributeValues": {":source": {"S": "$input.params('source')"}},
-            "Limit": ${pageLimit},
-            #if($exclusiveStartKey.length() > 0)
-            "ExclusiveStartKey": $util.base64Decode($exclusiveStartKey),
-            #end
-            "ScanIndexForward": false
+          "TableName": "${newsTableName}",
+          "KeyConditionExpression": "#Source = :source",
+          "ExpressionAttributeNames": {"#Source": "Source"},
+          "ExpressionAttributeValues": {":source": {"S": "$input.params('source')"}},
+          "Limit": 5,
+          #if($exclusiveStartKey.length() > 0)
+          "ExclusiveStartKey": $util.base64Decode($exclusiveStartKey),
+          #end
+          "ScanIndexForward": false
         }
       `,
-      },
     },
-    { dependsOn: [getMethod] }
-  );
-  const getIntegrationResponse = new apigateway.IntegrationResponse(
-    `${newsGetName}-integration-response`,
     {
-      ...commonParams,
-      statusCode: '200',
-    },
-    { dependsOn: [getIntegration] }
+      'method.request.querystring.source': true,
+      'method.request.querystring.exclusiveStartKey': false,
+    }
+  );
+
+  // Sources endpoints
+  const sourcesResourceName = `${restApiName}-sources`;
+  const sourcesResource = createResource(
+    sourcesResourceName,
+    restApi,
+    'sources'
+  );
+  const sourcesMethodOutput = createApiMethod(
+    sourcesResourceName,
+    restApi,
+    sourcesResource,
+    requestValidator,
+    role,
+    'Scan',
+    {
+      'application/json': interpolate`
+        {
+          "TableName": "${sourcesTableName}"
+        }
+      `,
+    }
   );
 
   // Deployment
@@ -123,7 +178,10 @@ export const createNewsApi = (
       stageName,
     },
     {
-      dependsOn: [getMethodResponse, getIntegration, getIntegrationResponse],
+      dependsOn: [
+        newsMethodOutput.integrationResponse,
+        sourcesMethodOutput.integration,
+      ],
     }
   );
   return { restApi, deployment };
