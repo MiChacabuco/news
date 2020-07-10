@@ -134,6 +134,7 @@ export const createNewsApi = (
         #else
             #set($limit = '10')
         #end
+        #set($project = $input.params('project'))
         #set($timestamp = $input.params('timestamp'))
         #set($exclusiveStartKey = $input.params('exclusiveStartKey'))
         {
@@ -146,6 +147,9 @@ export const createNewsApi = (
             , ":timestamp": {"N": "$timestamp"}
             #end
           },
+          #if($project.length() > 0)
+          "ProjectionExpression": "$project",
+          #end
           "Limit": $Integer.parseInt($limit),
           "ScanIndexForward": false
         }
