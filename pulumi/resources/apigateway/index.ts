@@ -1,206 +1,120 @@
-import { interpolate, Output, Input } from '@pulumi/pulumi';
-import { apigateway, iam } from '@pulumi/aws';
+import { iam, lambda, dynamodb } from '@pulumi/aws';
+import { apigateway } from '@pulumi/awsx';
 
-import { buildAssumeRolePolicy, buildAllowedPolicy } from '../utils';
+import { buildAllowedPolicy, attachPolicyToRole } from '../utils';
+import { lambdaAssumeRolePolicy } from '../common';
 import environment from '../../environment';
+// @ts-ignore
+import * as news from '../../../app/api/news';
+// @ts-ignore
+import * as sources from '../../../app/api/sources';
 
-const { projectName, region } = environment;
+const { projectName } = environment;
+const apiName = `${projectName}-api`;
 
-const createResource = (
-  name: string,
-  restApi: apigateway.RestApi,
-  pathPart: string
-): apigateway.Resource => {
-  return new apigateway.Resource(name, {
-    restApi,
-    parentId: restApi.rootResourceId,
-    pathPart,
+const createNewsHandler = (newsTable: dynamodb.Table) => {
+  const lambdaName = `${apiName}-news-lambda`;
+
+  // Create role
+  const role = new iam.Role(`${lambdaName}-role`, {
+    assumeRolePolicy: lambdaAssumeRolePolicy,
   });
+
+  // Create and attach policy to role
+  const policyName = `${lambdaName}-policy`;
+  const policy = buildAllowedPolicy(policyName, [
+    {
+      Action: ['dynamodb:Query'],
+      Resource: newsTable.arn,
+    },
+  ]);
+  attachPolicyToRole(role, policy, policyName);
+
+  return new lambda.CallbackFunction(
+    lambdaName,
+    {
+      role,
+      runtime: lambda.NodeJS12dXRuntime,
+      callback: news.handler,
+      environment: {
+        variables: {
+          REGION: environment.region,
+          TABLE_NAME: newsTable.name,
+          MEDIA_URL: '',
+        },
+      },
+    },
+    { ignoreChanges: ['environment'] }
+  );
 };
 
-const createApiMethod = (
-  baseName: string,
-  restApi: apigateway.RestApi,
-  resource: apigateway.Resource,
-  requestValidator: apigateway.RequestValidator,
-  role: iam.Role,
-  action: string,
-  requestTemplates: { [key: string]: Input<string> },
-  requestParameters?: { [key: string]: boolean }
-) => {
-  const commonParams = {
-    restApi,
-    resourceId: resource.id,
-    httpMethod: 'GET',
-  };
+const createSourcesHandler = (sourcesTable: dynamodb.Table) => {
+  const lambdaName = `${apiName}-sources-lambda`;
 
-  // Method
-  const method = new apigateway.Method(`${baseName}-method`, {
-    ...commonParams,
-    authorization: 'NONE',
-    requestParameters,
-    requestValidatorId: requestValidator.id,
+  // Create role
+  const role = new iam.Role(`${lambdaName}-role`, {
+    assumeRolePolicy: lambdaAssumeRolePolicy,
   });
-  const methodResponse = new apigateway.MethodResponse(
-    `${baseName}-method-response`,
-    {
-      ...commonParams,
-      statusCode: '200',
-    },
-    { dependsOn: [method] }
-  );
 
-  // Integration
-  const integration = new apigateway.Integration(
-    `${baseName}-integration`,
+  // Create and attach policy to role
+  const policyName = `${lambdaName}-policy`;
+  const policy = buildAllowedPolicy(policyName, [
     {
-      ...commonParams,
-      type: 'AWS',
-      integrationHttpMethod: 'POST',
-      uri: `arn:aws:apigateway:${region}:dynamodb:action/${action}`,
-      credentials: role.arn,
-      requestTemplates,
-      passthroughBehavior: 'WHEN_NO_TEMPLATES',
+      Action: ['dynamodb:Scan'],
+      Resource: sourcesTable.arn,
     },
-    { dependsOn: [method] }
-  );
-  const integrationResponse = new apigateway.IntegrationResponse(
-    `${baseName}-integration-response`,
-    {
-      ...commonParams,
-      statusCode: '200',
-    },
-    { dependsOn: [integration] }
-  );
+  ]);
+  attachPolicyToRole(role, policy, policyName);
 
-  return { method, methodResponse, integration, integrationResponse };
+  return new lambda.CallbackFunction(
+    lambdaName,
+    {
+      role,
+      runtime: lambda.NodeJS12dXRuntime,
+      callback: sources.handler,
+      environment: {
+        variables: {
+          TABLE_NAME: sourcesTable.name,
+          MEDIA_URL: '',
+        },
+      },
+    },
+    { ignoreChanges: ['environment'] }
+  );
 };
 
 export const createNewsApi = (
-  newsTableName: Output<string>,
-  sourcesTableName: Output<string>
-): { restApi: apigateway.RestApi; deployment: apigateway.Deployment } => {
-  // Create API Gateway role
-  const role = new iam.Role(`${projectName}-apigateway-role`, {
-    assumeRolePolicy: buildAssumeRolePolicy(['apigateway']),
-  });
+  newsTable: dynamodb.Table,
+  sourcesTable: dynamodb.Table
+) => {
+  const newsEventHandler = createNewsHandler(newsTable);
+  const sourcesEventHandler = createSourcesHandler(sourcesTable);
 
-  // Create API Gateway policy
-  const policy = buildAllowedPolicy(`${projectName}-apigateway-policy`, [
-    'dynamodb:Query',
-    'dynamodb:Scan',
-  ]);
-
-  // Attach policy to role
-  new iam.RolePolicyAttachment(
-    `${projectName}-apigateway-role-policy-attachment`,
-    {
-      role,
-      policyArn: policy.arn,
-    }
-  );
-
-  // API
-  const restApiName = `${projectName}-api`;
-  const restApi = new apigateway.RestApi(restApiName, {
-    endpointConfiguration: {
-      types: 'REGIONAL',
-    },
-  });
-  const requestValidator = new apigateway.RequestValidator(
-    `${restApiName}-validator`,
-    {
-      restApi,
-      validateRequestParameters: true,
-    }
-  );
-
-  // News endpoints
-  const newsResourceName = `${restApiName}-news`;
-  const newsResource = createResource(newsResourceName, restApi, 'news');
-  const newsMethodOutput = createApiMethod(
-    newsResourceName,
-    restApi,
-    newsResource,
-    requestValidator,
-    role,
-    'Query',
-    {
-      'application/json': interpolate`
-        #set($Integer = 0)
-        #set($limitParam = $input.params('Limit'))
-        #if($limitParam.length() > 0)
-            #set($limit = $limitParam)
-        #else
-            #set($limit = '10')
-        #end
-        #set($projectionExpression = $input.params('ProjectionExpression'))
-        #set($createdAt = $input.params('CreatedAt'))
-        #set($exclusiveStartKey = $input.params('ExclusiveStartKey'))
-        {
-          "TableName": "${newsTableName}",
-          "KeyConditionExpression": "#Source = :source#if($createdAt.length() > 0) AND CreatedAt = :createdAt#end",
-          "ExpressionAttributeNames": {"#Source": "Source"},
-          "ExpressionAttributeValues": {
-            ":source": {"S": "$input.params('Source')"}
-            #if($createdAt.length() > 0)
-            , ":createdAt": {"N": "$createdAt"}
-            #end
+  return new apigateway.API(apiName, {
+    routes: [
+      {
+        path: '/news',
+        method: 'GET',
+        eventHandler: newsEventHandler,
+        requiredParameters: [
+          {
+            in: 'query',
+            name: 'Source',
           },
-          #if($projectionExpression.length() > 0)
-          "ProjectionExpression": "$projectionExpression",
-          #end
-          "Limit": $Integer.parseInt($limit),
-          "ScanIndexForward": false
-        }
-      `,
+        ],
+      },
+      {
+        path: '/sources',
+        method: 'GET',
+        eventHandler: sourcesEventHandler,
+      },
+    ],
+    stageName: 'v1',
+    restApiArgs: {
+      endpointConfiguration: {
+        types: 'REGIONAL',
+      },
     },
-    {
-      'method.request.querystring.Source': true,
-      'method.request.querystring.CreatedAt': false,
-      'method.request.querystring.Limit': false,
-      'method.request.querystring.ExclusiveStartKey': false,
-      'method.request.querystring.ProjectionExpression': false,
-    }
-  );
-
-  // Sources endpoints
-  const sourcesResourceName = `${restApiName}-sources`;
-  const sourcesResource = createResource(
-    sourcesResourceName,
-    restApi,
-    'sources'
-  );
-  const sourcesMethodOutput = createApiMethod(
-    sourcesResourceName,
-    restApi,
-    sourcesResource,
-    requestValidator,
-    role,
-    'Scan',
-    {
-      'application/json': interpolate`
-        {
-          "TableName": "${sourcesTableName}"
-        }
-      `,
-    }
-  );
-
-  // Deployment
-  const stageName = 'v1';
-  const deployment = new apigateway.Deployment(
-    `${restApiName}-stage-${stageName}`,
-    {
-      restApi,
-      stageName,
-    },
-    {
-      dependsOn: [
-        newsMethodOutput.integrationResponse,
-        sourcesMethodOutput.integration,
-      ],
-    }
-  );
-  return { restApi, deployment };
+    requestValidator: 'PARAMS_ONLY',
+  });
 };

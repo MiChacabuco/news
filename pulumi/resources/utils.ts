@@ -19,19 +19,27 @@ export const buildAssumeRolePolicy = (
 
 export const buildAllowedPolicy = (
   name: string,
-  Action: string[],
-  Resource = '*'
+  statements: Partial<iam.PolicyStatement>[]
 ): iam.Policy => {
   return new iam.Policy(name, {
     policy: {
       Version,
-      Statement: [
-        {
-          Effect: 'Allow',
-          Action,
-          Resource,
-        },
-      ],
+      Statement: statements.map((s) => ({
+        Effect: 'Allow',
+        Resource: '*',
+        ...s,
+      })),
     },
+  });
+};
+
+export const attachPolicyToRole = (
+  role: iam.Role,
+  policy: iam.Policy,
+  policyName: string
+) => {
+  return new iam.RolePolicyAttachment(`${policyName}-attachment`, {
+    role,
+    policyArn: policy.arn,
   });
 };

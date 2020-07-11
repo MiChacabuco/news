@@ -1,21 +1,28 @@
 import { createNewsApi } from './resources/apigateway';
 import { createNewsTable, createNewsSourcesTable } from './resources/dynamodb';
-import { createNewsLambda } from './resources/lambda';
+import { createNewsScrapperLambda } from './resources/lambda';
+import environment from './environment';
 
-// Create the news tables
-const newsTable = createNewsTable();
-const newsSourcesTable = createNewsSourcesTable();
-// Create the news API Gateway
-const { restApi, deployment } = createNewsApi(
-  newsTable.name,
-  newsSourcesTable.name
-);
-// Create the news Lambda
-const newsLambda = createNewsLambda({ TABLE_NAME: newsTable.name });
+const run = async () => {
+  // Create the news tables
+  const newsTable = createNewsTable();
+  const newsSourcesTable = createNewsSourcesTable();
+  // Create the news API Gateway
+  const { restAPI, deployment } = createNewsApi(newsTable, newsSourcesTable);
+  // Create the news Lambda
+  const newsLambda = createNewsScrapperLambda(
+    environment.bucketName,
+    newsTable
+  );
 
-// Exports
-export const apiArn = restApi.arn;
-export const apiUrl = deployment.invokeUrl;
-export const lambdaArn = newsLambda.arn;
-export const newsTableArn = newsTable.arn;
-export const newsSourcesTableArn = newsSourcesTable.arn;
+  // Exports
+  return {
+    apiArn: restAPI.arn,
+    apiUrl: deployment.invokeUrl,
+    lambdaArn: newsLambda.arn,
+    newsTableArn: newsTable.arn,
+    newsSourcesTableArn: newsSourcesTable.arn,
+  };
+};
+
+run();

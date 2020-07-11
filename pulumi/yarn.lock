@@ -95,6 +95,23 @@
     read-package-tree "^5.2.1"
     resolve "^1.7.1"
 
+"@pulumi/awsx@^0.20.0":
+  version "0.20.0"
+  resolved "https://registry.yarnpkg.com/@pulumi/awsx/-/awsx-0.20.0.tgz#22f2e26d82f47b4d843976ede4ea303b69ea186e"
+  integrity sha512-ZYe3aH4hsxWPbjh9fgvZg3iExNDdEBBWXC1tpfuZgaU4+oxKixo9vZ74cb5N9DUH7AKf4H4ZTRApF32WsDa5xw==
+  dependencies:
+    "@pulumi/docker" "^1.0.0 || ^2.0.0"
+    "@types/aws-lambda" "^8.10.23"
+    mime "^2.0.0"
+
+"@pulumi/docker@^1.0.0 || ^2.0.0":
+  version "2.2.3"
+  resolved "https://registry.yarnpkg.com/@pulumi/docker/-/docker-2.2.3.tgz#5d3ecad832b43e3ab8c0ee782127c918412f30f4"
+  integrity sha512-dhrKyN3HLJk1nXjuy08edwYV44t+s+b9RzdTVetHaCd5xYflMVKzdB0L5JphAO0bPgWhQtHzzFvVy3avCl9kDQ==
+  dependencies:
+    "@pulumi/pulumi" "^2.0.0"
+    semver "^5.4.0"
+
 "@pulumi/pulumi@^2.0.0":
   version "2.5.0"
   resolved "https://registry.yarnpkg.com/@pulumi/pulumi/-/pulumi-2.5.0.tgz#a25307e04c8631adde9b91246cd8d5cc7375bf5a"
@@ -118,6 +135,11 @@
   version "0.3.0"
   resolved "https://registry.yarnpkg.com/@pulumi/query/-/query-0.3.0.tgz#f496608e86a18c3dd31b6c533408e2441c29071d"
   integrity sha512-xfo+yLRM2zVjVEA4p23IjQWzyWl1ZhWOGobsBqRpIarzLvwNH/RAGaoehdxlhx4X92302DrpdIFgTICMN4P38w==
+
+"@types/aws-lambda@^8.10.23":
+  version "8.10.59"
+  resolved "https://registry.yarnpkg.com/@types/aws-lambda/-/aws-lambda-8.10.59.tgz#64f602aef1cac9b21a74aad6705bf350c4a5173a"
+  integrity sha512-X/JclTKqHvo3nMTkHzClHhRz0yxn/VAr7J7LO6jBqaksZlhcDAWuU4oT1Yrt3E9MvX5jyyVIZtrwAI7oPXzXIg==
 
 "@types/color-name@^1.1.1":
   version "1.1.1"
@@ -942,7 +964,7 @@ semver-regex@^2.0.0:
   resolved "https://registry.yarnpkg.com/semver-regex/-/semver-regex-2.0.0.tgz#a93c2c5844539a770233379107b38c7b4ac9d338"
   integrity sha512-mUdIBBvdn0PLOeP3TEkMH7HHeUP3GjsXCwKarjv/kGmUFOYg1VqEemKhoQpWMu6X2I8kHeuVdGibLGkVK+/5Qw==
 
-"semver@2 || 3 || 4 || 5":
+"semver@2 || 3 || 4 || 5", semver@^5.4.0:
   version "5.7.1"
   resolved "https://registry.yarnpkg.com/semver/-/semver-5.7.1.tgz#a954f931aeba508d307bbf069eff0c01c96116f7"
   integrity sha512-sauaDf/PZdVgrLTNYHRtpXa1iRiKcaebiKQ1BJdpQlWH2lCvexQdX55snPFyK7QzpudqbCI0qXFfOasHdyNDGQ==
