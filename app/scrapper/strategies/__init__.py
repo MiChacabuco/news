@@ -1,1 +1,0 @@
-from .gobierno import GobiernoStrategy

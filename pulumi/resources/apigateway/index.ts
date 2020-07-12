@@ -33,9 +33,9 @@ const createNewsHandler = (newsTable: dynamodb.Table) => {
   return new lambda.CallbackFunction(
     lambdaName,
     {
-      role,
-      runtime: lambda.NodeJS12dXRuntime,
       callback: news.handler,
+      runtime: lambda.NodeJS12dXRuntime,
+      role,
       environment: {
         variables: {
           REGION: environment.region,

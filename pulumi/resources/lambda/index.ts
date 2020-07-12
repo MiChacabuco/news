@@ -1,5 +1,5 @@
 import { asset } from '@pulumi/pulumi';
-import { cloudwatch, dynamodb, iam, lambda, s3 } from '@pulumi/aws';
+import { cloudwatch, dynamodb, iam, lambda } from '@pulumi/aws';
 
 import {
   buildAssumeRolePolicy,
@@ -21,7 +21,7 @@ const createPolicy = (
   return buildAllowedPolicy(name, [
     {
       Action: ['s3:PutObject', 's3:PutObjectAcl'],
-      Resource: bucketArn,
+      Resource: `${bucketArn}/*`,
     },
     {
       Action: ['dynamodb:PutItem', 'dynamodb:Query'],
@@ -50,21 +50,20 @@ export const createNewsScrapperLambda = (
   // Create Lambda function
   const newsScrapperLambda = new lambda.Function(lambdaName, {
     code: new asset.AssetArchive({
-      handler: new asset.FileArchive('../app/scrapper'),
-      '.': new asset.FileArchive('../app/venv/lib/python3.8/site-packages'),
+      '.': new asset.FileArchive('../app/scrapper'),
     }),
-    handler: 'handler.run',
-    runtime: 'python3.8',
+    handler: 'index.handler',
+    runtime: lambda.NodeJS12dXRuntime,
     role: role.arn,
-    memorySize: 192,
-    timeout: 60,
+    timeout: 30,
     environment: {
       variables: {
         BUCKET_NAME: bucketName,
-        MEDIA_PATH: 'media/news',
+        MEDIA_PATH: '/media/news',
         GOBIERNO_FEED_URL: 'https://chacabuco.gob.ar/feed/',
         LOG_LEVEL: 'INFO',
         TABLE_NAME: table.name,
+        WP_NEWS_URL: 'https://chacabuco.gob.ar/wp-json/wp/v2/posts',
       },
     },
   });
