@@ -32,8 +32,7 @@ const createPolicy = (
 
 export const createNewsScrapperLambda = (
   bucketName: string,
-  table: dynamodb.Table,
-  variables = {}
+  table: dynamodb.Table
 ): lambda.Function => {
   const lambdaName = `${projectName}-lambda`;
 
@@ -65,7 +64,7 @@ export const createNewsScrapperLambda = (
         MEDIA_PATH: 'media/news',
         GOBIERNO_FEED_URL: 'https://chacabuco.gob.ar/feed/',
         LOG_LEVEL: 'INFO',
-        ...variables,
+        TABLE_NAME: table.name,
       },
     },
   });
