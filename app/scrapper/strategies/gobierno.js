@@ -2,6 +2,8 @@ const AWS = require("aws-sdk");
 const stream = require("stream");
 const axios = require("axios");
 
+const utils = require("../utils");
+
 const s3 = new AWS.S3();
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 
@@ -95,8 +97,8 @@ const uploadImage = async (imageResponse, fileName) => {
 const processItem = async (item) => {
   const result = {
     Id: item.id,
-    Title: item.title.rendered.replace("&#8211;", "–"),
-    Summary: item.content.rendered.replace(/<[^>]*>/g, ""),
+    Title: utils.asciiToChar(item.title.rendered),
+    Summary: utils.asciiToChar(item.content.rendered.replace(/<[^>]*>/g, "")),
     Link: item.link,
     Source: "gobierno",
     CreatedAt: dateToTimestamp(item.date_gmt),
