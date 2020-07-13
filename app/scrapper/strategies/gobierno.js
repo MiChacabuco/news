@@ -10,7 +10,7 @@ const dateToTimestamp = (date) => new Date(date).getTime();
 const getLatestSourceDate = async () => {
   const { WP_NEWS_URL } = process.env;
   const params = {
-    _fields: "date_gmt",
+    fields: "date_gmt",
     per_page: 1,
   };
   const response = await axios.get(WP_NEWS_URL, { params });

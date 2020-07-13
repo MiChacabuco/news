@@ -2,7 +2,12 @@ const atob = (from) => Buffer.from(from, "base64").toString("binary");
 
 exports.handler = async (event) => {
   const AWS = require("aws-sdk");
-  const { REGION, TABLE_NAME, MEDIA_URL } = process.env;
+  const {
+    REGION,
+    SOURCES_TABLE_NAME,
+    NEWS_TABLE_NAME,
+    MEDIA_URL,
+  } = process.env;
 
   const {
     Source,
@@ -27,8 +32,8 @@ exports.handler = async (event) => {
       ":createdAt": CreatedAt,
     };
   }
-  const params = {
-    TableName: TABLE_NAME,
+  const newsParams = {
+    TableName: NEWS_TABLE_NAME,
     KeyConditionExpression,
     ExpressionAttributeNames: { "#Source": "Source" },
     ExpressionAttributeValues,
@@ -38,12 +43,16 @@ exports.handler = async (event) => {
   };
 
   if (ExclusiveStartKey) {
-    params.ExclusiveStartKey = JSON.parse(atob(ExclusiveStartKey));
+    newsParams.ExclusiveStartKey = JSON.parse(atob(ExclusiveStartKey));
   }
 
-  let result;
+  let newsResult;
+  let sourcesResult;
   try {
-    result = await docClient.query(params).promise();
+    newsResult = await docClient.query(newsParams).promise();
+    sourcesResult = await docClient
+      .scan({ TableName: SOURCES_TABLE_NAME })
+      .promise();
   } catch (e) {
     return {
       statusCode: 500,
@@ -51,8 +60,18 @@ exports.handler = async (event) => {
     };
   }
 
-  // Add base url to images
-  result.Items = result.Items.map((item) => {
+  // Hash the sources for Embedding
+  const sources = {};
+  sourcesResult.Items.forEach((source) => {
+    const { Id, Name, Avatar } = source;
+    sources[Id] = {
+      Name,
+      // Add base url to avatar
+      Avatar: `${MEDIA_URL}${Avatar}`,
+    };
+  });
+
+  newsResult.Items = newsResult.Items.map((item) => {
     if (!item.Image) {
       // No image, continue.
       return item;
@@ -60,12 +79,15 @@ exports.handler = async (event) => {
 
     return {
       ...item,
+      // Add base url to image
       Image: `${MEDIA_URL}${item.Image}`,
+      // Embed the source
+      Source: sources[Source],
     };
   });
 
   return {
     statusCode: 200,
-    body: JSON.stringify(result),
+    body: JSON.stringify(newsResult),
   };
 };
