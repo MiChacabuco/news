@@ -5,6 +5,8 @@ const axios = require("axios");
 const s3 = new AWS.S3();
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 
+const dateToTimestamp = (date) => new Date(date).getTime();
+
 const getLatestSourceDate = async () => {
   const { WP_NEWS_URL } = process.env;
   const params = {
@@ -13,7 +15,7 @@ const getLatestSourceDate = async () => {
   };
   const response = await axios.get(WP_NEWS_URL, { params });
   const latestNews = response.data[0];
-  return new Date(latestNews.date_gmt);
+  return dateToTimestamp(latestNews.date_gmt);
 };
 
 const getLatestSavedDate = async () => {
@@ -97,7 +99,7 @@ const processItem = async (item) => {
     Summary: item.content.rendered.replace(/<[^>]*>/g, ""),
     Link: item.link,
     Source: "gobierno",
-    CreatedAt: new Date(item.date_gmt).getTime(),
+    CreatedAt: dateToTimestamp(item.date_gmt),
   };
   const media = item._links["wp:featuredmedia"];
   if (media.length) {
@@ -117,7 +119,7 @@ const processItem = async (item) => {
   return result;
 };
 
-const fetchNews = async () => {
+const fetchNews = async (minDate) => {
   const { WP_NEWS_URL } = process.env;
   const fields = [
     "id",
@@ -132,7 +134,14 @@ const fetchNews = async () => {
   };
   console.log("Fetching news ...");
   const response = await axios.get(WP_NEWS_URL, { params });
-  const newsPromises = response.data.map((item) => processItem(item));
+  const newsPromises = [];
+  response.data.forEach((item) => {
+    // Skip already saved news
+    if (dateToTimestamp(item.date_gmt) > minDate) {
+      newsPromises.push(processItem(item));
+    }
+  });
+  console.log(`${newsPromises.length} news to process.`);
   return Promise.all(newsPromises);
 };
 
@@ -153,7 +162,9 @@ const saveNews = async (news) => {
         );
       });
   });
-  return Promise.all(putPromises);
+  return Promise.all(putPromises).then(() => {
+    console.log("News saved into DynamoDB.");
+  });
 };
 
 exports.start = async () => {
@@ -166,9 +177,8 @@ exports.start = async () => {
       return;
     }
   }
-  const news = await fetchNews();
+  const news = await fetchNews(latestSavedDate);
   await saveNews(news);
-  console.log("News saved into DynamoDB.");
 
   return {
     statusCode: 200,
