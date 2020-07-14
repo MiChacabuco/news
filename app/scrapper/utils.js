@@ -3,4 +3,5 @@ exports.asciiToChar = (text) => {
   codes.forEach((code) => {
     text = text.replace(`&#${code};`, String.fromCharCode(code));
   });
+  return text;
 };
