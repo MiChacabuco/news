@@ -1,4 +1,4 @@
-import { iam } from '@pulumi/aws';
+import { iam, cloudwatch, lambda } from '@pulumi/aws';
 
 const Version = '2012-10-17'; // Policy document version
 
@@ -41,5 +41,23 @@ export const attachPolicyToRole = (
   return new iam.RolePolicyAttachment(`${policyName}-attachment`, {
     role,
     policyArn: policy.arn,
+  });
+};
+
+export const warmLambda = (name: string, func: lambda.Function) => {
+  name = `${name}-warmer`;
+  const eventRule = new cloudwatch.EventRule(`${name}-rule`, {
+    scheduleExpression: 'rate(5 minutes)',
+  });
+  new cloudwatch.EventTarget(`${name}-target`, {
+    arn: func.arn,
+    rule: eventRule.name,
+    input: JSON.stringify({ warmer: true }),
+  });
+  new lambda.Permission(`${name}-permission`, {
+    function: func,
+    action: 'lambda:InvokeFunction',
+    principal: 'events.amazonaws.com',
+    sourceArn: eventRule.arn,
   });
 };

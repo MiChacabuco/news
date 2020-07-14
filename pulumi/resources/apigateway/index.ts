@@ -1,16 +1,15 @@
+import { asset } from '@pulumi/pulumi';
 import { iam, lambda, dynamodb } from '@pulumi/aws';
 import { apigateway } from '@pulumi/awsx';
 
-import { buildAllowedPolicy, attachPolicyToRole } from '../utils';
-import { lambdaAssumeRolePolicy } from '../common';
+import { buildAllowedPolicy, attachPolicyToRole, warmLambda } from '../utils';
+import { lambdaAssumeRolePolicy, logsPolicy } from '../common';
 import environment from '../../environment';
-// @ts-ignore
-import * as news from '../../../app/api';
 
 const { projectName } = environment;
 const apiName = `${projectName}-api`;
 
-const createNewsHandler = (
+const createNewsLambda = (
   newsTable: dynamodb.Table,
   sourcesTable: dynamodb.Table
 ) => {
@@ -32,13 +31,21 @@ const createNewsHandler = (
       Action: ['dynamodb:Scan'],
       Resource: sourcesTable.arn,
     },
+    {
+      Action: ['lambda:InvokeFunction'],
+    },
   ]);
+  attachPolicyToRole(role, logsPolicy, `${lambdaName}-logs-policy`);
   attachPolicyToRole(role, policy, policyName);
 
-  return new lambda.CallbackFunction(lambdaName, {
-    callback: news.handler,
+  return new lambda.Function(lambdaName, {
+    code: new asset.AssetArchive({
+      '.': new asset.FileArchive('../app/api'),
+    }),
+    handler: 'index.handler',
     runtime: lambda.NodeJS12dXRuntime,
-    role,
+    timeout: 10,
+    role: role.arn,
     environment: {
       variables: {
         REGION: environment.region,
@@ -54,14 +61,16 @@ export const createNewsApi = (
   newsTable: dynamodb.Table,
   sourcesTable: dynamodb.Table
 ) => {
-  const newsEventHandler = createNewsHandler(newsTable, sourcesTable);
+  const newsLambda = createNewsLambda(newsTable, sourcesTable);
+  // Warm the Lambda
+  warmLambda(`${projectName}-api`, newsLambda);
 
   return new apigateway.API(apiName, {
     routes: [
       {
         path: '/news',
         method: 'GET',
-        eventHandler: newsEventHandler,
+        eventHandler: newsLambda,
         requiredParameters: [
           {
             in: 'query',

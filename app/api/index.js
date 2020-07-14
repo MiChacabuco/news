@@ -1,6 +1,11 @@
+const warmer = require("lambda-warmer");
+
 const atob = (from) => Buffer.from(from, "base64").toString("binary");
 
 exports.handler = async (event) => {
+  if (await warmer(event)) {
+    return "warmed";
+  }
   const AWS = require("aws-sdk");
   const {
     REGION,
