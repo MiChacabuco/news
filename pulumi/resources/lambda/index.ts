@@ -59,7 +59,7 @@ export const createNewsScrapperLambda = (
     environment: {
       variables: {
         BUCKET_NAME: bucketName,
-        MEDIA_PATH: 'media/news',
+        MEDIA_PATH: '/media/news',
         GOBIERNO_FEED_URL: 'https://chacabuco.gob.ar/feed/',
         LOG_LEVEL: 'INFO',
         TABLE_NAME: table.name,
