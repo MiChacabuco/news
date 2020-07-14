@@ -51,6 +51,8 @@ const createNewsLambda = (
         REGION: environment.region,
         NEWS_TABLE_NAME: newsTable.name,
         SOURCES_TABLE_NAME: sourcesTable.name,
+        DEFAULT_LIMIT: '5',
+        MAX_LIMIT: '10',
         MEDIA_URL: '',
       },
     },

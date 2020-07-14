@@ -12,13 +12,15 @@ exports.handler = async (event) => {
     SOURCES_TABLE_NAME,
     NEWS_TABLE_NAME,
     MEDIA_URL,
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
   } = process.env;
 
   const {
     Source,
     CreatedAt,
     ProjectionExpression,
-    Limit = "5",
+    Limit = DEFAULT_LIMIT,
     ExclusiveStartKey,
   } = event.queryStringParameters;
 
@@ -43,7 +45,7 @@ exports.handler = async (event) => {
     ExpressionAttributeNames: { "#Source": "Source" },
     ExpressionAttributeValues,
     ProjectionExpression,
-    Limit: Number(Limit),
+    Limit: Math.min(Number(Limit), Number(MAX_LIMIT)),
     ScanIndexForward: false,
   };
 
