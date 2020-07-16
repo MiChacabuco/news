@@ -14,6 +14,7 @@ exports.handler = async (event) => {
     MEDIA_URL,
     DEFAULT_LIMIT,
     MAX_LIMIT,
+    SUMMARY_LENGTH,
   } = process.env;
 
   const {
@@ -79,18 +80,22 @@ exports.handler = async (event) => {
   });
 
   newsResult.Items = newsResult.Items.map((item) => {
-    if (!item.Image) {
-      // No image, continue.
-      return item;
+    // Embed the source
+    if (item.Source) {
+      item.Source = sources[Source];
     }
 
-    return {
-      ...item,
-      // Add base url to image
-      Image: `${MEDIA_URL}${item.Image}`,
-      // Embed the source
-      Source: sources[Source],
-    };
+    // Truncate the summary
+    if (item.Summary) {
+      item.Summary = `${item.Summary.slice(0, Number(SUMMARY_LENGTH))} ...`;
+    }
+
+    // Add base url to image
+    if (item.Image) {
+      item.Image = `${MEDIA_URL}${item.Image}`;
+    }
+
+    return item;
   });
 
   return {

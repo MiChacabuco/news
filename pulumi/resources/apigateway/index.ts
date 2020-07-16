@@ -54,6 +54,7 @@ const createNewsLambda = (
         DEFAULT_LIMIT: '10',
         MAX_LIMIT: '25',
         MEDIA_URL: '',
+        SUMMARY_LENGTH: '280',
       },
     },
   });
