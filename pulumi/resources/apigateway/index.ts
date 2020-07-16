@@ -81,7 +81,12 @@ export const createNewsApi = (
         ],
       },
     ],
-    stageName: 'v1',
     requestValidator: 'PARAMS_ONLY',
+    restApiArgs: {
+      endpointConfiguration: {
+        types: 'REGIONAL',
+      },
+    },
+    stageName: 'v1',
   });
 };
