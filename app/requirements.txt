@@ -1,3 +1,0 @@
-feedparser==5.2.1  # https://github.com/kurtmckee/feedparser
-requests==2.24.0  # https://github.com/psf/requests
-scrapy==2.2.0  # https://github.com/scrapy/scrapy

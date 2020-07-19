@@ -1,4 +1,0 @@
-config:
-  aws:region: sa-east-1
-  pulumi:template: aws-typescript
-  news:bucket-name: michacabuco

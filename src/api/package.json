@@ -1,0 +1,16 @@
+{
+  "name": "news",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "license": "MIT",
+  "scripts": {
+    "build": "rm -rf build && tsc && yarn install --prod --modules-folder build/node_modules"
+  },
+  "dependencies": {
+    "lambda-warmer": "^1.2.1"
+  },
+  "devDependencies": {
+    "aws-cdk": "^1.52.0",
+    "typescript": "^3.9.7"
+  }
+}

@@ -1,22 +1,34 @@
+import { DynamoDB } from "aws-sdk";
 const warmer = require("lambda-warmer");
 
-const atob = (from) => Buffer.from(from, "base64").toString("binary");
+import { News, NewsSource } from "../../common/models";
 
-exports.handler = async (event) => {
+const atob = (from: string) => Buffer.from(from, "base64").toString("binary");
+
+interface Event {
+  queryStringParameters: {
+    [key: string]: string;
+  };
+}
+
+export const handler = async (event: Event) => {
+  // Warm lambda
   if (await warmer(event)) {
     return "warmed";
   }
-  const AWS = require("aws-sdk");
+
+  // Environment variables
   const {
     REGION,
-    SOURCES_TABLE_NAME,
-    NEWS_TABLE_NAME,
+    NEWS_TABLE_NAME = "",
+    SOURCES_TABLE_NAME = "",
     MEDIA_URL,
     DEFAULT_LIMIT,
     MAX_LIMIT,
     SUMMARY_LENGTH,
   } = process.env;
 
+  // Request parameters
   const {
     Source,
     CreatedAt,
@@ -25,12 +37,14 @@ exports.handler = async (event) => {
     ExclusiveStartKey,
   } = event.queryStringParameters;
 
-  const dynamoDbService = new AWS.DynamoDB({ region: REGION });
-  const docClient = new AWS.DynamoDB.DocumentClient({
-    service: dynamoDbService,
+  // Init DynamoDB document client
+  const docClient = new DynamoDB.DocumentClient({
+    service: new DynamoDB({ region: REGION }),
   });
+
+  // Fetch news and sources
   let KeyConditionExpression = "#Source = :source";
-  let ExpressionAttributeValues = {
+  let ExpressionAttributeValues: DynamoDB.DocumentClient.ExpressionAttributeValueMap = {
     ":source": Source,
   };
   if (CreatedAt) {
@@ -40,7 +54,7 @@ exports.handler = async (event) => {
       ":createdAt": CreatedAt,
     };
   }
-  const newsParams = {
+  const newsParams: DynamoDB.DocumentClient.QueryInput = {
     TableName: NEWS_TABLE_NAME,
     KeyConditionExpression,
     ExpressionAttributeNames: { "#Source": "Source" },
@@ -49,13 +63,12 @@ exports.handler = async (event) => {
     Limit: Math.min(Number(Limit), Number(MAX_LIMIT)),
     ScanIndexForward: false,
   };
-
   if (ExclusiveStartKey) {
     newsParams.ExclusiveStartKey = JSON.parse(atob(ExclusiveStartKey));
   }
 
-  let newsResult;
-  let sourcesResult;
+  let newsResult: DynamoDB.DocumentClient.QueryOutput;
+  let sourcesResult: DynamoDB.DocumentClient.QueryOutput;
   try {
     newsResult = await docClient.query(newsParams).promise();
     sourcesResult = await docClient
@@ -68,34 +81,39 @@ exports.handler = async (event) => {
     };
   }
 
-  // Hash the sources for Embedding
-  const sources = {};
-  sourcesResult.Items.forEach((source) => {
+  // Hash the sources for embedding
+  const sources: { [id: string]: Partial<NewsSource> } = {};
+  const sourceItems = sourcesResult.Items ?? [];
+  sourceItems.forEach((item) => {
+    const source: NewsSource = item as NewsSource;
     const { Id, Name, Avatar } = source;
     sources[Id] = {
       Name,
       // Add base url to avatar
-      Avatar: `${MEDIA_URL}${Avatar}`,
+      Avatar: `${MEDIA_URL}/${Avatar}`,
     };
   });
 
-  newsResult.Items = newsResult.Items.map((item) => {
+  // Map the output
+  const newsItems = newsResult.Items ?? [];
+  newsResult.Items = newsItems.map((item) => {
+    const news = item as News;
     // Embed the source
-    if (item.Source) {
-      item.Source = sources[Source];
+    if (news.Source) {
+      news.Source = sources[Source];
     }
 
     // Truncate the summary
-    if (item.Summary) {
-      item.Summary = `${item.Summary.slice(0, Number(SUMMARY_LENGTH))} ...`;
+    if (news.Summary) {
+      news.Summary = `${news.Summary.slice(0, Number(SUMMARY_LENGTH))} ...`;
     }
 
     // Add base url to image
-    if (item.Image) {
-      item.Image = `${MEDIA_URL}${item.Image}`;
+    if (news.Image) {
+      news.Image = `${MEDIA_URL}/${news.Image}`;
     }
 
-    return item;
+    return news;
   });
 
   return {
