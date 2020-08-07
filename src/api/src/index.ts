@@ -13,19 +13,19 @@ interface Event {
 
 let warm = false;
 
+const logWarmState = (action: string) => {
+  console.log({ action, warm });
+  warm = true;
+};
+
 export const handler = async (event: Event) => {
   if (event.warm) {
-    // Warm lambda and return ASAP
-    console.log({
-      action: "warmer",
-      warm,
-    });
-    warm = true;
-
+    // Lambda warmed, return ASAP.
+    logWarmState("warmer");
     return;
   }
 
-  warm = true;
+  logWarmState("user");
 
   // Environment variables
   const {
