@@ -1,21 +1,31 @@
 import { DynamoDB } from "aws-sdk";
-const warmer = require("lambda-warmer");
 
 import { News, NewsSource } from "../../common/models";
 
 const atob = (from: string) => Buffer.from(from, "base64").toString("binary");
 
 interface Event {
+  warm?: boolean;
   queryStringParameters: {
     [key: string]: string;
   };
 }
 
+let warm = false;
+
 export const handler = async (event: Event) => {
-  // Warm lambda
-  if (await warmer(event)) {
-    return "warmed";
+  if (event.warm) {
+    // Warm lambda and return ASAP
+    console.log({
+      action: "warmer",
+      warm,
+    });
+    warm = true;
+
+    return;
   }
+
+  warm = true;
 
   // Environment variables
   const {
