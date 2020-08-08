@@ -147,6 +147,7 @@ export class NewsStack extends Stack {
       handler: "api/src/index.handler",
       timeout: Duration.seconds(10),
       runtime: Runtime.NODEJS_12_X,
+      memorySize: 1024,
       environment: {
         REGION: this.region,
         NEWS_TABLE_NAME: this.newsTable.tableName,
