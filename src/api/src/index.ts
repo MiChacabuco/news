@@ -1,42 +1,38 @@
 import { DynamoDB } from "aws-sdk";
 
 import { News, NewsSource } from "../../common/models";
+import { Event } from "./models";
+import { atob, logWarmState } from "./utils";
 
-const atob = (from: string) => Buffer.from(from, "base64").toString("binary");
+// Environment variables
+const {
+  REGION,
+  NEWS_TABLE_NAME = "",
+  SOURCES_TABLE_NAME = "",
+  MEDIA_URL,
+  DEFAULT_LIMIT,
+  MAX_LIMIT,
+  SUMMARY_LENGTH,
+} = process.env;
 
-interface Event {
-  warm?: boolean;
-  queryStringParameters: {
-    [key: string]: string;
-  };
-}
+// Init DynamoDB document client
+const docClient = new DynamoDB.DocumentClient({
+  service: new DynamoDB({ region: REGION }),
+});
 
+// Initial warm state
 let warm = false;
-
-const logWarmState = (action: string) => {
-  console.log({ action, warm });
-  warm = true;
-};
 
 export const handler = async (event: Event) => {
   if (event.warm) {
     // Lambda warmed, return ASAP.
-    logWarmState("warmer");
+    logWarmState("warmer", warm);
+    warm = true;
     return;
   }
 
-  logWarmState("user");
-
-  // Environment variables
-  const {
-    REGION,
-    NEWS_TABLE_NAME = "",
-    SOURCES_TABLE_NAME = "",
-    MEDIA_URL,
-    DEFAULT_LIMIT,
-    MAX_LIMIT,
-    SUMMARY_LENGTH,
-  } = process.env;
+  logWarmState("user", warm);
+  warm = true;
 
   // Request parameters
   const {
@@ -47,16 +43,12 @@ export const handler = async (event: Event) => {
     ExclusiveStartKey,
   } = event.queryStringParameters;
 
-  // Init DynamoDB document client
-  const docClient = new DynamoDB.DocumentClient({
-    service: new DynamoDB({ region: REGION }),
-  });
-
   // Fetch news and sources
   let KeyConditionExpression = "#Source = :source";
   let ExpressionAttributeValues: DynamoDB.DocumentClient.ExpressionAttributeValueMap = {
     ":source": Source,
   };
+
   if (CreatedAt) {
     KeyConditionExpression += " AND CreatedAt = :createdAt";
     ExpressionAttributeValues = {
@@ -64,6 +56,7 @@ export const handler = async (event: Event) => {
       ":createdAt": CreatedAt,
     };
   }
+
   const newsParams: DynamoDB.DocumentClient.QueryInput = {
     TableName: NEWS_TABLE_NAME,
     KeyConditionExpression,
@@ -73,12 +66,14 @@ export const handler = async (event: Event) => {
     Limit: Math.min(Number(Limit), Number(MAX_LIMIT)),
     ScanIndexForward: false,
   };
+
   if (ExclusiveStartKey) {
     newsParams.ExclusiveStartKey = JSON.parse(atob(ExclusiveStartKey));
   }
 
   let newsResult: DynamoDB.DocumentClient.QueryOutput;
   let sourcesResult: DynamoDB.DocumentClient.QueryOutput;
+
   try {
     newsResult = await docClient.query(newsParams).promise();
     sourcesResult = await docClient
@@ -94,6 +89,7 @@ export const handler = async (event: Event) => {
   // Hash the sources for embedding
   const sources: { [id: string]: Partial<NewsSource> } = {};
   const sourceItems = sourcesResult.Items ?? [];
+
   sourceItems.forEach((item) => {
     const source: NewsSource = item as NewsSource;
     const { Id, Name, Avatar } = source;
@@ -106,6 +102,7 @@ export const handler = async (event: Event) => {
 
   // Map the output
   const newsItems = newsResult.Items ?? [];
+
   newsResult.Items = newsItems.map((item) => {
     const news = item as News;
     // Embed the source
