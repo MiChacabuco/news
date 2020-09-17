@@ -166,7 +166,7 @@ export default class Gobierno {
     };
 
     const media = item._links["wp:featuredmedia"];
-    if (media.length) {
+    if (media?.length) {
       // Download news image
       const imageInfo = await this.getImageInfo(media[0].href);
       if (imageInfo) {
