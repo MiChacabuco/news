@@ -1,14 +1,27 @@
-# Welcome to your CDK TypeScript project!
+# Chacabuco news scrapper
 
-This is a blank project for TypeScript development with CDK.
+> Serverless news scrapper for the city of Chacabuco (Buenos Aires), running in [AWS](https://aws.amazon.com).
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+## Services
 
-## Useful commands
+- **api:** REST API
+- **scrapper:** Scrapper service
 
-- `npm run build` compile typescript to js
-- `npm run watch` watch for changes and compile
-- `npm run test` perform the jest unit tests
-- `cdk deploy` deploy this stack to your default AWS account/region
-- `cdk diff` compare deployed stack with current state
-- `cdk synth` emits the synthesized CloudFormation template
+## Build
+
+```bash
+# cd into service
+cd src/<service>
+
+# install dependencies
+yarn install
+
+# build for production
+yarn run build
+```
+
+## Deployment
+
+```bash
+yarn cdk deploy --parameters mediaUrl=<url> --parameters bucketName=<name>
+```
