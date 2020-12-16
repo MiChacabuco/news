@@ -1,6 +1,7 @@
 {
   "name": "cdk",
   "version": "0.1.0",
+  "license": "MIT",
   "husky": {
     "hooks": {
       "pre-commit": "pretty-quick --staged"
